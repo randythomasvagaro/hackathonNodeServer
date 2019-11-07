@@ -34,6 +34,8 @@ app.get('/service', (req, res) => {
 
 
 app.post('/payItForward', (req, res) => {
+
+    console.log(req.body, 'BODY')
     function commafy( num ) {
         var str = num.toString().split('.');
         if (str[0].length >= 5) {
@@ -45,9 +47,7 @@ app.post('/payItForward', (req, res) => {
         return str.join('.');
     }
 
-    var phoneNumber = JSON.parse(req.body.Memory).twilio.collected_data.collect_comments.answers.phonenumber.answer
     var amount = JSON.parse(req.body.Memory).twilio.collected_data.collect_comments.answers.amount.answer
-    console.log(phoneNumber, amount);
     let actions = [];
 
     if (amount > 20) {
@@ -61,11 +61,27 @@ app.post('/payItForward', (req, res) => {
         res.send(actions);
     } else {
         var totalAmount = commafy(amount);
-        db.transactionSave({
-            phoneNumber: phoneNumber,
-            service: "Pay It Forward",
-            amount: amount,
-        })
+        if (JSON.parse(req.body.Memory).twilio.sms && !JSON.parse(req.body.Memory).twilio.voice) {
+            var phoneNumberSMS = JSON.parse(req.body.Memory).twilio.sms.To.toString().substr(1, 11)   
+            console.log(phoneNumberSMS, phoneNumberVoice, amount, "<====================="); 
+            db.transactionSave({
+                phoneNumber: phoneNumberSMS,
+                service: "Pay It Forward",
+                amount: amount,
+            })
+        } else if (JSON.parse(req.body.Memory).twilio.voice && !JSON.parse(req.body.Memory).twilio.sms) {
+            var phoneNumberVoice = JSON.parse(req.body.Memory).twilio.voice.From.toString().substr(1, 11)
+            console.log(phoneNumberSMS, phoneNumberVoice, amount, "<=====================");
+            db.transactionSave({
+                phoneNumber: phoneNumberVoice,
+                service: "Pay It Forward",
+                amount: amount,
+            })
+        } else {
+            console.log('ERROR 404')
+        }
+
+
         db.Service.findOneAndUpdate(
             { "service": "Pay It Forward" }, 
             {$inc: { "fundraisedAmount": amount }
@@ -118,11 +134,6 @@ app.post('/payItForwardRecapture', (req, res) => {
                             "question": "How many haircuts would you like to donate?",
                             "name": "amount",
                             "type": "Twilio.NUMBER"
-                        },
-                        {
-                            "question": "Thank you! Lastly, what is your phone number?",
-                            "name": "phonenumber",
-                            "type": "Twilio.PHONE_NUMBER"
                         }
                     ],
                     "on_complete": {
@@ -135,7 +146,6 @@ app.post('/payItForwardRecapture', (req, res) => {
 
     res.send(actions)
 })
-
 
 app.post('/viewTotalsPayItForward', (req, res) => {
     function commafy( num ) {
